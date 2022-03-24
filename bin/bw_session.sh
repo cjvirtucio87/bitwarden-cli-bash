@@ -6,7 +6,7 @@
 ### it prints the BW_SESSION to stdout, instead.
 ###
 ### Usage:
-###   <Options> ./bw_session.sh <Arguments>
+###   <Options> ./bw_session.sh
 ###   . ./bw_session.sh
 ###
 ### Options:
@@ -26,6 +26,12 @@
 ###     "username": "foo@gmail.com",
 ###     "password": "mypass123"
 ###   }
+###
+###   As mentioned above, this script is dual-natured in that it can either be sourced
+###   or invoked directly. In both cases, an attempt is made to log in with BW_CREDS. If the login
+###   attempt is successful, the session value is captured from bw's output and cached in a file.
+###   This session value is then set to BW_SESSION and exported, so that future bw calls can
+###   be made without having to log in again.
 
 function bw_creds {
   local bw_creds="${BW_CREDS:-"${HOME}/.secrets/bitwarden/creds.sh"}"
@@ -90,5 +96,5 @@ if (return 0 &>/dev/null); then
     return 1
   fi
 else
-  main "$@"
+  main
 fi

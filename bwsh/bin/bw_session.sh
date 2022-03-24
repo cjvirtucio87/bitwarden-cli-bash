@@ -11,6 +11,8 @@
 ###
 ### Options:
 ###   BW_CREDS: path to the credentials script (default: "${HOME}/.secrets/bitwarden/creds.sh)
+###   GET_PATH: if set to anything, print the path to the script so that it can be
+###     sourced, then exit
 ###
 ### Examples:
 ###   # Login and print out the BW_SESSION variable
@@ -76,6 +78,11 @@ function log {
 
 function main {
   set -eo pipefail
+  if [[ -v GET_PATH ]]; then
+    readlink --canonicalize "$0"
+    return
+  fi
+
   bw_login
 }
 

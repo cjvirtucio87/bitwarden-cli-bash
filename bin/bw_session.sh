@@ -29,7 +29,6 @@
 
 function bw_creds {
   local bw_creds="${BW_CREDS:-"${HOME}/.secrets/bitwarden/creds.sh"}"
-  log "BW_CREDS: ${bw_creds}"
   if [[ ! -x "${bw_creds}" ]]; then
     log "missing executable BW_CREDS script"
     return 1
@@ -39,10 +38,22 @@ function bw_creds {
 }
 
 function bw_login {
-  bw login \
-    --passwordfile <(get_password) "$(get_username)" \
+  if bw login --check "$(get_username)" &>/dev/null; then
+    log "already logged in"
+    return
+  fi
+
+  local login_output
+  if ! login_output="$(bw login --passwordfile <(get_password) "$(get_username)")"; then
+    log "login failed"
+    return 1
+  fi
+
+  mkdir --parents "${HOME}/.secrets/bitwarden"
+  echo -n "${login_output}" \
     | grep --extended-regexp '^\$ export' \
-    | sed --regexp-extended 's/^\$ export BW_SESSION="(.+)"$/\1/g'
+    | sed --regexp-extended 's/^\$ export BW_SESSION="(.+)"$/\1/g' \
+    | tee "${HOME}/.secrets/bitwarden/session"
 }
 
 function get_password {
@@ -63,10 +74,20 @@ function main {
 }
 
 if (return 0 &>/dev/null); then
-  if ! BW_SESSION="$(bw_login)"; then
-    log "login failed"
-  else
+  if [[ -v BW_SESSION ]]; then
+    log "already logged in"
+  elif [[ -f "${HOME}/.secrets/bitwarden/session" ]]; then
+    log "detected cached session file"
+    BW_SESSION="$(cat "${HOME}/.secrets/bitwarden/session")"
     export BW_SESSION
+  elif bw_session="$(bw_login)"; then
+    log "logged in"
+    if [[ -n "${bw_session}" ]]; then
+      export BW_SESSION="${bw_session}"
+    fi
+  else
+    log "login failed"
+    return 1
   fi
 else
   main "$@"

@@ -11,6 +11,7 @@
 ###
 ### Options:
 ###   BW_CREDS: path to the credentials script (default: "${HOME}/.secrets/bitwarden/creds.sh)
+###   FORCE: force login and creating a new session
 ###   GET_PATH: if set to anything, print the path to the script so that it can be
 ###     sourced, then exit
 ###
@@ -46,9 +47,21 @@ function bw_creds {
 }
 
 function bw_login {
+  local session_file="${HOME}/.secrets/bitwarden/session"
+  if [[ -v FORCE ]]; then
+    rm -f "${session_file}"
+    bw logout
+  fi
+
   if bw login --check "$(get_username)" &>/dev/null; then
     log "already logged in"
-    return
+    if [[ -f "${session_file}" ]]; then
+      cat "${session_file}"
+      return
+    fi
+
+    log "missing session file; logout and log back in with this script"
+    return 1
   fi
 
   local login_output
@@ -61,7 +74,8 @@ function bw_login {
   echo -n "${login_output}" \
     | grep --extended-regexp '^\$ export' \
     | sed --regexp-extended 's/^\$ export BW_SESSION="(.+)"$/\1/g' \
-    | tee "${HOME}/.secrets/bitwarden/session"
+    | tee "${session_file}"
+  chmod 0600 "${session_file}" &>/dev/null
 }
 
 function get_password {
@@ -95,9 +109,7 @@ if (return 0 &>/dev/null); then
     export BW_SESSION
   elif bw_session="$(bw_login)"; then
     log "logged in"
-    if [[ -n "${bw_session}" ]]; then
-      export BW_SESSION="${bw_session}"
-    fi
+    export BW_SESSION="${bw_session}"
   else
     log "login failed"
     return 1

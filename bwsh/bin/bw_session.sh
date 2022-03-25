@@ -22,6 +22,12 @@
 ###   # Activate a bitwarden session
 ###   . ./bw_session.sh
 ###
+###   # Source the script from wherever it is located
+###   . "$(GET_PATH=1 bw_session.sh)"
+###
+###   # Force a new session
+###   FORCE=1 bw_session.sh
+###
 ### Remarks:
 ###   This script requires jq. Moreover, the BW_CREDS script must print out the credentials as json
 ###   in the following format:

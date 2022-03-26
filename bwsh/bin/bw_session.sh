@@ -54,11 +54,6 @@ function bw_creds {
 
 function bw_login {
   local session_file="${HOME}/.secrets/bitwarden/session"
-  if [[ -v FORCE ]]; then
-    rm -f "${session_file}"
-    bw logout
-  fi
-
   if bw login --check "$(get_username)" &>/dev/null; then
     log "already logged in"
     if [[ -f "${session_file}" ]]; then
@@ -105,6 +100,12 @@ function main {
 
   bw_login
 }
+
+if [[ -v FORCE ]]; then
+  unset BW_SESSION
+  rm -f "${HOME}/.secrets/bitwarden/session"
+  bw logout
+fi
 
 if (return 0 &>/dev/null); then
   if [[ -v BW_SESSION ]]; then

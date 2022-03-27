@@ -41,6 +41,11 @@
 ###   attempt is successful, the session value is captured from bw's output and cached in a file.
 ###   This session value is then set to BW_SESSION and exported, so that future bw calls can
 ###   be made without having to log in again.
+###
+###   The script also attempts to only make the appropriate calls depending on the status of the vault.
+###   If the unauthenticated, a login attempt is made. If authenticated but the vault is locked,
+###   the vault will be unlocked. If authenticated and the vault is unlocked, the script will unlock
+###   the vault if BW_SESSION is not set.
 
 function bw_creds {
   local bw_creds="${BW_CREDS:-"${HOME}/.secrets/bitwarden/creds.sh"}"
@@ -73,47 +78,24 @@ function bw_unlock {
 }
 
 function create_session {
-  local sourced="$1"
+  local should_export="$1"
   local vault_status
   vault_status="$(bw status | jq -r '.status')"
 
   local bw_session
   case "${vault_status}" in
     locked)
-      if bw_session="$(bw_unlock)"; then
-        log "logged in"
-        if [[ -n "${sourced}" ]]; then
-          export BW_SESSION="${bw_session}"
-          return
-        fi
-
-        echo -n "${bw_session}"
-
-        return
-      fi
-
-      log "failed unlock attempt"
-      return 1
+      log "vault is locked; unlocking"
+      export_or_echo_session 'bw_unlock' "${should_export}"
       ;;
     unauthenticated)
-      if bw_session="$(bw_login)"; then
-        log "logged in"
-        if [[ -n "${sourced}" ]]; then
-          export BW_SESSION="${bw_session}"
-          return
-        fi
-
-        echo -n "${bw_session}"
-
-        return
-      fi
-
-      log "failed login attempt"
-      return 1
+      log "not logged in; authenticating"
+      export_or_echo_session 'bw_login' "${should_export}"
       ;;
     unlocked)
+      log "vault is unlocked; unlocking if BW_SESSION is not set"
       if [[ -v BW_SESSION ]]; then
-        if [[ -n "${sourced}" ]]; then
+        if [[ -n "${should_export}" ]]; then
           return
         fi
 
@@ -122,25 +104,28 @@ function create_session {
         return
       fi
 
-      if bw_session="$(bw_unlock)"; then
-        log "logged in"
-        if [[ -n "${sourced}" ]]; then
-          export BW_SESSION="${bw_session}"
-          return
-        fi
-
-        echo -n "${bw_session}"
-
-        return
-      fi
-
-      log "failed unlock attempt"
-      return 1
+      export_or_echo_session 'bw_unlock' "${should_export}"
       ;;
     *)
       log "invalid vault_status [${vault_status}]"
       return 1
   esac
+}
+
+function export_or_echo_session {
+  local callback="$1"
+  local should_export="$2"
+  if bw_session="$("${callback}")"; then
+    log "created session"
+    if [[ -n "${should_export}" ]]; then
+      export BW_SESSION="${bw_session}"
+      return
+    fi
+
+    echo -n "${bw_session}"
+
+    return
+  fi
 }
 
 function get_password {

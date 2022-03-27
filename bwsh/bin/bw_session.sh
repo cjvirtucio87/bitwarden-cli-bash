@@ -79,6 +79,22 @@ function bw_login {
   chmod 0600 "${session_file}" &>/dev/null
 }
 
+function create_session {
+  if [[ -v BW_SESSION ]]; then
+    log "already logged in"
+  elif [[ -f "${HOME}/.secrets/bitwarden/session" ]]; then
+    log "detected cached session file"
+    BW_SESSION="$(cat "${HOME}/.secrets/bitwarden/session")"
+    export BW_SESSION
+  elif bw_session="$(bw_login)"; then
+    log "logged in"
+    export BW_SESSION="${bw_session}"
+  else
+    log "login failed"
+    return 1
+  fi
+}
+
 function get_password {
   bw_creds | jq -r '.password'
 }
@@ -108,19 +124,7 @@ if [[ -v FORCE ]]; then
 fi
 
 if (return 0 &>/dev/null); then
-  if [[ -v BW_SESSION ]]; then
-    log "already logged in"
-  elif [[ -f "${HOME}/.secrets/bitwarden/session" ]]; then
-    log "detected cached session file"
-    BW_SESSION="$(cat "${HOME}/.secrets/bitwarden/session")"
-    export BW_SESSION
-  elif bw_session="$(bw_login)"; then
-    log "logged in"
-    export BW_SESSION="${bw_session}"
-  else
-    log "login failed"
-    return 1
-  fi
+  create_session
 else
   main
 fi

@@ -38,9 +38,13 @@
 ###
 ###   As mentioned above, this script is dual-natured in that it can either be sourced
 ###   or invoked directly. In both cases, an attempt is made to log in with BW_CREDS. If the login
-###   attempt is successful, the session value is captured from bw's output and cached in a file.
-###   This session value is then set to BW_SESSION and exported, so that future bw calls can
-###   be made without having to log in again.
+###   attempt is successful, the session value is either printed to stdout (when invoked directly)
+###   or set on the exported BW_SESSION environment variable (when sourced).
+###
+###   The script also attempts to only make the appropriate calls depending on the status of the vault.
+###   If the unauthenticated, a login attempt is made. If authenticated but the vault is locked,
+###   the vault will be unlocked. If authenticated and the vault is unlocked, the script will unlock
+###   the vault if BW_SESSION is not set.
 
 function bw_creds {
   local bw_creds="${BW_CREDS:-"${HOME}/.secrets/bitwarden/creds.sh"}"
@@ -53,30 +57,74 @@ function bw_creds {
 }
 
 function bw_login {
-  local session_file="${HOME}/.secrets/bitwarden/session"
-  if bw login --check "$(get_username)" &>/dev/null; then
-    log "already logged in"
-    if [[ -f "${session_file}" ]]; then
-      cat "${session_file}"
-      return
-    fi
-
-    log "missing session file; logout and log back in with this script"
-    return 1
-  fi
-
   local login_output
   if ! login_output="$(bw login --passwordfile <(get_password) "$(get_username)")"; then
     log "login failed"
     return 1
   fi
 
-  mkdir --parents "${HOME}/.secrets/bitwarden"
-  echo -n "${login_output}" \
-    | grep --extended-regexp '^\$ export' \
-    | sed --regexp-extended 's/^\$ export BW_SESSION="(.+)"$/\1/g' \
-    | tee "${session_file}"
-  chmod 0600 "${session_file}" &>/dev/null
+  parse_session "${login_output}"
+}
+
+function bw_unlock {
+  local unlock_output
+  if ! unlock_output="$(bw unlock --passwordfile <(get_password))"; then
+    log "unlock failed"
+    return 1
+  fi
+
+  parse_session "${unlock_output}"
+}
+
+function create_session {
+  local should_export="$1"
+  local vault_status
+  vault_status="$(bw status | jq -r '.status')"
+
+  local bw_session
+  case "${vault_status}" in
+    locked)
+      log "vault is locked; unlocking"
+      export_or_echo_session 'bw_unlock' "${should_export}"
+      ;;
+    unauthenticated)
+      log "not logged in; authenticating"
+      export_or_echo_session 'bw_login' "${should_export}"
+      ;;
+    unlocked)
+      log "vault is unlocked; unlocking if BW_SESSION is not set"
+      if [[ -v BW_SESSION ]]; then
+        if [[ -n "${should_export}" ]]; then
+          return
+        fi
+
+        echo -n "${BW_SESSION}"
+
+        return
+      fi
+
+      export_or_echo_session 'bw_unlock' "${should_export}"
+      ;;
+    *)
+      log "invalid vault_status [${vault_status}]"
+      return 1
+  esac
+}
+
+function export_or_echo_session {
+  local callback="$1"
+  local should_export="$2"
+  if bw_session="$("${callback}")"; then
+    log "created session"
+    if [[ -n "${should_export}" ]]; then
+      export BW_SESSION="${bw_session}"
+      return
+    fi
+
+    echo -n "${bw_session}"
+
+    return
+  fi
 }
 
 function get_password {
@@ -91,6 +139,12 @@ function log {
   >&2 printf '[%s] %s\n' "$(date --iso=s)" "$1"
 }
 
+function parse_session {
+  echo -n "$1" \
+    | grep --extended-regexp '^\$ export' \
+    | sed --regexp-extended 's/^\$ export BW_SESSION="(.+)"$/\1/g'
+}
+
 function main {
   set -eo pipefail
   if [[ -v GET_PATH ]]; then
@@ -98,29 +152,16 @@ function main {
     return
   fi
 
-  bw_login
+  create_session
 }
 
 if [[ -v FORCE ]]; then
   unset BW_SESSION
-  rm -f "${HOME}/.secrets/bitwarden/session"
   bw logout
 fi
 
 if (return 0 &>/dev/null); then
-  if [[ -v BW_SESSION ]]; then
-    log "already logged in"
-  elif [[ -f "${HOME}/.secrets/bitwarden/session" ]]; then
-    log "detected cached session file"
-    BW_SESSION="$(cat "${HOME}/.secrets/bitwarden/session")"
-    export BW_SESSION
-  elif bw_session="$(bw_login)"; then
-    log "logged in"
-    export BW_SESSION="${bw_session}"
-  else
-    log "login failed"
-    return 1
-  fi
+  create_session 1
 else
   main
 fi

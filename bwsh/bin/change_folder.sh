@@ -19,11 +19,11 @@ set -eo pipefail
 ###   This command is a pass-through to bitwarden CLI and uses jq
 ###   to manipulate the items.
 
-ROOT_DIR="$(dirname "$(readlink --canonicalize "$0")")"
+ROOT_DIR="$(dirname "$0")"
 readonly ROOT_DIR
 
 function log {
-  >&2 printf '[%s] %s\n' "$(date --iso=s)" "$1"
+  >&2 printf '[%s] %s\n' "$(date)" "$1"
 }
 
 function main {
@@ -51,7 +51,7 @@ function main {
   local item_id
   item_id="$(jq -r '.id' <<<"${item_json}")"
   jq ".folderId=\"${folder_id}\"" <<<"${item_json}" \
-    | base64 -w 0 \
+    | base64 \
     | bw edit item "${item_id}"
 }
 

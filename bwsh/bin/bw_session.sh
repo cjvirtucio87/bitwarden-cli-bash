@@ -93,7 +93,7 @@ function create_session {
       ;;
     unlocked)
       log "vault is unlocked; unlocking if BW_SESSION is not set"
-      if [[ -v BW_SESSION ]]; then
+      if [[ -n "${BW_SESSION}" ]]; then
         if [[ -n "${should_export}" ]]; then
           return
         fi
@@ -136,26 +136,26 @@ function get_username {
 }
 
 function log {
-  >&2 printf '[%s] %s\n' "$(date --iso=s)" "$1"
+  >&2 printf '[%s] %s\n' "$(date)" "$1"
 }
 
 function parse_session {
   echo -n "$1" \
-    | grep --extended-regexp '^\$ export' \
-    | sed --regexp-extended 's/^\$ export BW_SESSION="(.+)"$/\1/g'
+    | grep -E '^\$ export' \
+    | sed -E 's/^\$ export BW_SESSION="(.+)"$/\1/g'
 }
 
 function main {
   set -eo pipefail
-  if [[ -v GET_PATH ]]; then
-    readlink --canonicalize "$0"
+  if [[ -n "${GET_PATH}" ]]; then
+    echo -n "$0"
     return
   fi
 
   create_session
 }
 
-if [[ -v FORCE ]]; then
+if [[ -n "${FORCE}" ]]; then
   unset BW_SESSION
   bw logout
 fi

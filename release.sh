@@ -2,10 +2,6 @@
 
 set -e
 
-#!/bin/bash
-
-set -e
-
 ### Script for creating and uploading releases.
 ###
 ### Usage:
@@ -18,14 +14,14 @@ set -e
 ###   FULL_RELEASE:
 ###     If set to anything, makes the release a full release.
 
-ROOT_DIR="$(readlink --canonicalize --no-newline "$(dirname "$0")")"
+ROOT_DIR="$(dirname "$0" | tr -d '\n')"
 readonly ROOT_DIR
 
 function cleanup {
   >&2 echo "begin cleanup"
   if [[ -d "${TEMP_DIR}" ]]; then
     >&2 echo "purging TEMP_DIR [${TEMP_DIR}]"
-    rm --recursive --force "${TEMP_DIR}"
+    rm -rf "${TEMP_DIR}"
   fi
   >&2 echo "end cleanup"
 }
@@ -71,7 +67,7 @@ function upload_release_asset {
 function main {
   echo "starting release"
 
-  TEMP_DIR="$(mktemp --directory)"
+  TEMP_DIR="$(mktemp -d)"
   trap cleanup EXIT
 
   local version
@@ -87,7 +83,7 @@ function main {
   clconf --ignore-env --yaml "${release_yaml}" setv 'body' "bitwarden-cli-bash release, version ${version}"
   clconf --ignore-env --yaml "${release_yaml}" setv 'draft' 'false'
 
-  if [[ ! -v FULL_RELEASE ]]; then
+  if [[ -z "${FULL_RELEASE}" ]]; then
     clconf --ignore-env --yaml "${release_yaml}" setv 'prerelease' 'true'
   fi
 
@@ -127,7 +123,7 @@ function main {
     "${ROOT_DIR}/bwsh" \
     "${asset_name}")"
 
-  if [[ -v DEBUG ]]; then
+  if [[ -n "${DEBUG}" ]]; then
     >&2 clconf --yaml <(echo "${upload_release_asset_response}")
   fi
   echo "completed release"

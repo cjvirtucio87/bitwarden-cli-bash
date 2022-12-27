@@ -45,6 +45,10 @@ function main {
           --raw-output \
           --arg cred_name "${cred_name}" \
           '.[] | select(.name == $cred_name)')" || true
+    if [[ -z "${json}" ]]; then
+      # re-attempt lookup if only one item matches cred_name as a pattern
+      json="$(bw get item "${cred_name}")"
+    fi
   else
     log "looking up details of credential matching word ${cred_name}"
     json="$(bw get item "${cred_name}")"

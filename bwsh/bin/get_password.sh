@@ -27,17 +27,30 @@ set -eo pipefail
 ###   This command is a pass-through to bitwarden CLI and uses jq
 ###   to manipulate the items.
 
+function log {
+  >&2 printf '[%s] %s\n' "$(date)" "$1"
+}
+
 function main {
   local cred_name="$1"
   if [[ -n "${EXACT_MATCH}" ]]; then
-    log "looking up password of credential matching pattern ${cred_name}"
-    bw get item "$1" 2>&1 \
+    log "looking up details of credential matching pattern ${cred_name}"
+    if bw get item "${cred_name}" 2>&1 \
       | grep -iv more \
       | xargs -I {} bw get item {} \
-      | jq -r "select(.name == \"${cred_name}\") | .login.password"
+      | jq \
+          --slurp \
+          --raw-output \
+          --arg cred_name "${cred_name}" \
+          '.[] | select(.name == $cred_name)'; then
+      return
+    fi
+
+    # re-attempt lookup if only one item matches cred_name as a pattern
+    bw get item "${cred_name}"
   else
-    log "looking up password of credential matching word ${cred_name}"
-    bw get password "${cred_name}"
+    log "looking up details of credential matching word ${cred_name}"
+    bw get item "${cred_name}"
   fi
 }
 

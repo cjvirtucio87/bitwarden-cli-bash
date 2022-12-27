@@ -37,14 +37,14 @@ function main {
   local json
   if [[ -n "${EXACT_MATCH}" ]]; then
     log "looking up details of credential matching pattern ${cred_name}"
-    bw get item "${cred_name}" 2>&1 \
+    json="$(bw get item "${cred_name}" 2>&1 \
       | grep -iv more \
       | xargs -I {} bw get item {} \
       | jq \
           --slurp \
           --raw-output \
           --arg cred_name "${cred_name}" \
-          '.[] | select(.name == $cred_name)'
+          '.[] | select(.name == $cred_name)')" || true
   else
     log "looking up details of credential matching word ${cred_name}"
     json="$(bw get item "${cred_name}")"

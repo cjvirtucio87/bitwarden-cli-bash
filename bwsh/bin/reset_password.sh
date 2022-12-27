@@ -12,6 +12,11 @@ set -eo pipefail
 ###     pattern by default, per bitwarden-cli's behavior, unless
 ###     EXACT_MATCH is set, in which case the item with the name
 ###     as exactly typed is filtered for
+### Options:
+###   EXACT_MATCH: if set to anything, looks up the one item that
+###     exactly matches the cred_name
+###   PW_OPTS: if set to a space-delimited list, use this list
+###     in the call to the password generation command
 ###
 ### Examples:
 ###   # reset the password of any item with anything that
@@ -21,6 +26,10 @@ set -eo pipefail
 ###   # reset the password of any item with anything whose name
 ###   # exactly matches the word ally
 ###   EXACT_MATCH=1 reset_password.sh ally
+###
+###   # reset the password with custom password options (defaults are overriden)
+###   # exactly matches the word ally
+###   PW_OPTS='--uppercase --lowercase --special --number 30' reset_password.sh ally
 ###
 ### Remarks:
 ###   This command is a pass-through to bitwarden CLI and uses jq
@@ -61,8 +70,14 @@ function main {
 
   log "generating new password"
 
+  local pw_opts=(--uppercase --lowercase --special --number 20)
+  # shellcheck disable=SC2153
+  if [[ -n "${PW_OPTS}" ]]; then
+    read -ra pw_opts <<<"${PW_OPTS}"
+  fi
+
   local new_pass
-  new_pass="$(bw generate password --uppercase --lowercase --special --number 20)"
+  new_pass="$(bw generate password "${pw_opts[@]}")"
 
   local item_id
   item_id="$(jq -r .id <<<"${json}")"
